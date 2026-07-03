@@ -10,7 +10,7 @@ steps connecting Grafana to Auth0 OIDC.
 
 ## Why
 
-to show prequisite steps to setup testing environment. 
+to show prequisite steps to setup testing environment as well as steps for Github Actions. 
 
 ## File Structure
 
@@ -24,7 +24,7 @@ to show prequisite steps to setup testing environment.
 
 ## Preqs
 
-install the following on your mac.
+install the following on your mac for local testing.
 
 ```bash
 brew install terraform   # tf install
@@ -102,10 +102,81 @@ curl -s -X POST "https://$AUTH0_DOMAIN/oauth/token" \
   | jq -R 'split(".") | .[1] | @base64d | fromjson | .scope'
 ```
 
-## Run
+## Local Run
 
 ```bash
 terraform init
 terraform plan
 terraform apply
+```
+
+## Github Actions
+
+The steps above are for local testing and debugging. The MVP runs entirely via GitHub Actions.
+
+Store credentials in [GitHub Actions secrets](https://github.com/heyseus1/supah-awesome-teleporter/settings/secrets/actions) under **Settings → Secrets and variables → Actions** as the EnVars. 
+
+```bash
+AUTH0_DOMAIN
+AUTH0_CLIENT_ID
+AUTH0_CLIENT_SECRET
+```
+
+The GH action workflow will be located in .github/workflows/terraform.yml Pushing or opening a PR triggers the workflow, which runs the same Terraform commands. reference [Terraform template](https://github.com/heyseus1/supah-awesome-teleporter/new/main?filename=.github%2Fworkflows%2Fterraform.yml&workflow_template=deployments%2Fterraform) for design structure tips. 
+
+```yaml
+name: 'Terraform'
+
+# Triggers: run on pushes to main AND on any pull request.
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+
+# Least-privilege: this workflow's token can only read repo contents.
+permissions:
+  contents: read
+
+jobs:
+  terraform:
+    name: 'Terraform'
+    runs-on: ubuntu-latest
+
+    # Auth0 credentials, pulled from GH Actions secrets as Envars.
+    env:
+      AUTH0_DOMAIN: ${{ secrets.AUTH0_DOMAIN }}
+      AUTH0_CLIENT_ID: ${{ secrets.AUTH0_CLIENT_ID }}
+      AUTH0_CLIENT_SECRET: ${{ secrets.AUTH0_CLIENT_SECRET }}
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      # Pull the repo code onto the runner.
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Install the Terraform CLI on the runner.
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      # Initialize the working directory.
+      - name: Terraform Init
+        run: terraform init
+
+      # Fail the run if any .tf file isn't formatted properly.
+      - name: Terraform Format
+        run: terraform fmt -check
+
+      # run a plan.
+      - name: Terraform Plan
+        run: terraform plan -input=false
+
+      # On push to "main", build or change infrastructure according to Terraform configuration files
+      # Note: It is recommended to set up a required "strict" status check in your repository for "Terraform Cloud". See the documentation on "strict" required status checks for more information: https://help.github.com/en/github/administering-a-repository/types-of-required-status-checks
+      
+      - name: Terraform Apply
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: terraform apply -auto-approve -input=false
 ```

@@ -10,14 +10,14 @@ To leverage GitHub Actions using Terraform to configure Auth0 and Grafana via OI
 
 ## Why
 
-To use IaaC to allow readable and repoducible configuration setting rather than clickops.
+To use IaC to allow readable and repoducible configuration setting rather than clickops.
 Thus removing manual credential settings and enforcing MFA 
 
 ## Scope
 
-**In scope:** three systems.
+**In scope:** Three systems.
 
-1. Tf configures the tenant and enforces phishing resistant MFA for apps.
+1. Github Action hosted Tf configures the tenant and enforces phishing resistant MFA for apps.
 2. Tf adds Grafana as an OIDC app.
 3. A golang script that provisions users via API.
 
@@ -70,6 +70,12 @@ OTP codes factors are prone to phishing; WebAuthn / passkeys are not. The tenant
 enforces Authn as the primary factor and disables risky factors (SMS,
 email OTP, push). Enforcement is at the tenant level rather than individual 
 applications.
+
+**Approval gate.** Infrastructure changes require a pull request review.
+Terraform runs `plan` on pull requests so the change will be reviewable before it
+touches the tenant, and `apply` runs only on merge to main. `-auto-approve`
+answers Terraform's own prompt in CI; human approval happens at PR review,
+so no change will be implemented without review.
 
 **Credential handling.** All credentials will be stored in GH Actions secrets and
 injected as EnVars. No secret is written to a
